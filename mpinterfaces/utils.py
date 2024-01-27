@@ -2,8 +2,7 @@
 # Copyright (c) Henniggroup.
 # Distributed under the terms of the MIT License.
 
-from __future__ import division, print_function, unicode_literals, \
-    absolute_import
+from __future__ import division, print_function, unicode_literals, absolute_import
 
 
 """
@@ -31,7 +30,7 @@ from monty.json import MontyEncoder, MontyDecoder
 from monty.serialization import loadfn, dumpfn
 
 from pymatgen.core.sites import PeriodicSite
-from pymatgen import Structure, Lattice, Element
+from pymatgen.core import Structure, Lattice, Element
 from pymatgen.core.surface import Slab, SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.io.vasp.inputs import Poscar
@@ -46,11 +45,17 @@ from custodian.custodian import Custodian
 from fireworks.user_objects.queue_adapters.common_adapter import CommonAdapter
 
 from ase.build import surface
-#from ase.lattice.surface import surface
+
+# from ase.lattice.surface import surface
 
 from mpinterfaces.default_logger import get_default_logger
-from mpinterfaces import VASP_STD_BIN, QUEUE_SYSTEM, QUEUE_TEMPLATE, VASP_PSP,\
- PACKAGE_PATH
+from mpinterfaces import (
+    VASP_STD_BIN,
+    QUEUE_SYSTEM,
+    QUEUE_TEMPLATE,
+    VASP_PSP,
+    PACKAGE_PATH,
+)
 
 __author__ = "Kiran Mathew, Joshua J. Gabriel, Michael Ashton"
 __copyright__ = "Copyright 2017, Henniggroup"
@@ -83,12 +88,17 @@ def get_ase_slab(pmg_struct, hkl=(1, 1, 1), min_thick=10, min_vac=10):
     ase_slab = surface(ase_atoms, hkl, nlayers)
     ase_slab.center(vacuum=min_vac / 2, axis=2)
     pmg_slab_structure = AseAtomsAdaptor().get_structure(ase_slab)
-    return Slab(lattice=pmg_slab_structure.lattice,
-                species=pmg_slab_structure.species_and_occu,
-                coords=pmg_slab_structure.frac_coords,
-                site_properties=pmg_slab_structure.site_properties,
-                miller_index=hkl, oriented_unit_cell=pmg_slab_structure,
-                shift=0., scale_factor=None, energy=None)
+    return Slab(
+        lattice=pmg_slab_structure.lattice,
+        species=pmg_slab_structure.species_and_occu,
+        coords=pmg_slab_structure.frac_coords,
+        site_properties=pmg_slab_structure.site_properties,
+        miller_index=hkl,
+        oriented_unit_cell=pmg_slab_structure,
+        shift=0.0,
+        scale_factor=None,
+        energy=None,
+    )
 
 
 def slab_from_file(hkl, filename):
@@ -103,14 +113,16 @@ def slab_from_file(hkl, filename):
          Slab object
     """
     slab_input = Structure.from_file(filename)
-    return Slab(slab_input.lattice,
-                slab_input.species_and_occu,
-                slab_input.frac_coords,
-                hkl,
-                Structure.from_sites(slab_input, to_unit_cell=True),
-                shift=0,
-                scale_factor=np.eye(3, dtype=np.int),
-                site_properties=slab_input.site_properties)
+    return Slab(
+        slab_input.lattice,
+        slab_input.species_and_occu,
+        slab_input.frac_coords,
+        hkl,
+        Structure.from_sites(slab_input, to_unit_cell=True),
+        shift=0,
+        scale_factor=np.eye(3, dtype=int),
+        site_properties=slab_input.site_properties,
+    )
 
 
 def get_magmom_string(structure):
@@ -131,11 +143,11 @@ def get_magmom_string(structure):
         if s.specie not in considered:
             amount = int(structure.composition[s.specie])
             if s.specie.is_transition_metal:
-                magmoms.append('{}*6.0'.format(amount))
+                magmoms.append("{}*6.0".format(amount))
             else:
-                magmoms.append('{}*0.5'.format(amount))
+                magmoms.append("{}*0.5".format(amount))
             considered.append(s.specie)
-    return ' '.join(magmoms)
+    return " ".join(magmoms)
 
 
 def get_magmom_mae(poscar, mag_init):
@@ -144,13 +156,12 @@ def get_magmom_mae(poscar, mag_init):
     """
     mae_magmom = []
 
-    sites_dict = poscar.as_dict()['structure']['sites']
+    sites_dict = poscar.as_dict()["structure"]["sites"]
 
     # initialize a magnetic moment on the transition metal
     # in vector form on the x-direction
     for n, s in enumerate(sites_dict):
-
-        if Element(s['label']).is_transition_metal:
+        if Element(s["label"]).is_transition_metal:
             mae_magmom.append([0.0, 0.0, mag_init])
         else:
             mae_magmom.append([0.0, 0.0, 0.0])
@@ -167,19 +178,17 @@ def get_magmom_afm(poscar, database=None):
     orig_structure_name = poscar.comment
 
     if len(poscar.structure) % 2 != 0:
-
-        if database == 'twod':
+        if database == "twod":
             # no need for more vacuum spacing
             poscar.structure.make_supercell([2, 2, 1])
         else:
             # for bulk structure
             poscar.structure.make_supercell([2, 2, 2])
 
-    sites_dict = poscar.as_dict()['structure']['sites']
+    sites_dict = poscar.as_dict()["structure"]["sites"]
 
     for n, s in enumerate(sites_dict):
-
-        if Element(s['label']).is_transition_metal:
+        if Element(s["label"]).is_transition_metal:
             if n % 2 == 0:
                 afm_magmom.append(6.0)
             else:
@@ -191,12 +200,12 @@ def get_magmom_afm(poscar, database=None):
             else:
                 afm_magmom.append(-0.5)
 
-    return afm_magmom, Poscar(structure=poscar.structure,
-                              comment=orig_structure_name)
+    return afm_magmom, Poscar(structure=poscar.structure, comment=orig_structure_name)
 
 
-def get_run_cmmnd(nnodes=1, ntasks=16, walltime='10:00:00', job_bin=None,
-                  job_name=None, mem=None):
+def get_run_cmmnd(
+    nnodes=1, ntasks=16, walltime="10:00:00", job_bin=None, job_name=None, mem=None
+):
     """
     returns the fireworks CommonAdapter based on the queue
     system specified by mpint_config.yaml and the submit
@@ -207,37 +216,51 @@ def get_run_cmmnd(nnodes=1, ntasks=16, walltime='10:00:00', job_bin=None,
     d = {}
     job_cmd = None
     try:
-       qtemp_file = open(QUEUE_TEMPLATE+'qtemplate.yaml')
-       qtemp = yaml.load(qtemp_file)
-       qtemp_file.close()
+        qtemp_file = open(QUEUE_TEMPLATE + "qtemplate.yaml")
+        qtemp = yaml.load(qtemp_file)
+        qtemp_file.close()
     except:
-       # test case scenario
-       qtemp = {'account': None, 'mem': None, \
-        'walltime': '10:00:00', 'nodes': 1, 'pre_rocket': None, 'job_name': None, \
-        'ntasks': 16, 'email': None, 'rocket_launch': None}
-    qtemp.update({'nodes': nnodes, 'ntasks':ntasks, 'walltime': walltime, \
-                  'rocket_launch': job_bin, 'job_name':job_name,'mem':mem})
+        # test case scenario
+        qtemp = {
+            "account": None,
+            "mem": None,
+            "walltime": "10:00:00",
+            "nodes": 1,
+            "pre_rocket": None,
+            "job_name": None,
+            "ntasks": 16,
+            "email": None,
+            "rocket_launch": None,
+        }
+    qtemp.update(
+        {
+            "nodes": nnodes,
+            "ntasks": ntasks,
+            "walltime": walltime,
+            "rocket_launch": job_bin,
+            "job_name": job_name,
+            "mem": mem,
+        }
+    )
     # SLURM queue
-    if QUEUE_SYSTEM == 'slurm':
+    if QUEUE_SYSTEM == "slurm":
         if job_bin is None:
             job_bin = VASP_STD_BIN
         else:
             job_bin = job_bin
-        d = {'type': 'SLURM',
-             'params': qtemp}
+        d = {"type": "SLURM", "params": qtemp}
     # PBS queue
-    elif QUEUE_SYSTEM == 'pbs':
+    elif QUEUE_SYSTEM == "pbs":
         if job_bin is None:
             job_bin = VASP_STD_BIN
         else:
             job_bin = job_bin
-        d = {'type': 'PBS',
-             'params': qtemp}
+        d = {"type": "PBS", "params": qtemp}
     else:
-        job_cmd = ['ls', '-lt']
+        job_cmd = ["ls", "-lt"]
     if d:
-        #print (CommonAdapter(d['type'], **d['params']), job_cmd)
-        return (CommonAdapter(d['type'], **d['params']), job_cmd)
+        # print (CommonAdapter(d['type'], **d['params']), job_cmd)
+        return (CommonAdapter(d["type"], **d["params"]), job_cmd)
     else:
         return (None, job_cmd)
 
@@ -253,30 +276,31 @@ def get_job_state(job):
     ofname = None
 
     # pbs
-    if QUEUE_SYSTEM == 'pbs':# in hostname:
+    if QUEUE_SYSTEM == "pbs":  # in hostname:
         try:
-            output = sp.check_output(['qstat', '-i', job.job_id])
-            state = output.rstrip('\n').split('\n')[-1].split()[-2]
+            output = sp.check_output(["qstat", "-i", job.job_id])
+            state = output.rstrip("\n").split("\n")[-1].split()[-2]
         except:
-            logger.info('Job {} not in the que'.format(job.job_id))
+            logger.info("Job {} not in the que".format(job.job_id))
             state = "00"
         ofname = "FW_job.out"
 
     # slurm
-    elif QUEUE_SYSTEM == 'slurm':
+    elif QUEUE_SYSTEM == "slurm":
         try:
-            output = sp.check_output(['squeue', '--job', job.job_id])
-            state = output.rstrip('\n').split('\n')[-1].split()[-4]
+            output = sp.check_output(["squeue", "--job", job.job_id])
+            state = output.rstrip("\n").split("\n")[-1].split()[-4]
         except:
-            logger.info('Job {} not in the que.'.format(job.job_id))
+            logger.info("Job {} not in the que.".format(job.job_id))
             logger.info(
-                'This could mean either the batchsystem crashed(highly unlikely) or the job completed a long time ago')
+                "This could mean either the batchsystem crashed(highly unlikely) or the job completed a long time ago"
+            )
             state = "00"
         ofname = "vasp_job-" + str(job.job_id) + ".out"
 
     # no batch system
     else:
-        state = 'XX'
+        state = "XX"
     return state, ofname
 
 
@@ -302,38 +326,39 @@ def update_checkpoint(job_ids=None, jfile=None, **kwargs):
     qadapter = None
     # if updating the specs of the job
     for k, v in kwargs.items():
-        if k == 'incar':
+        if k == "incar":
             incar = v
-        if k == 'kpoints':
+        if k == "kpoints":
             kpoints = v
-        if k == 'que':
+        if k == "que":
             qadapter = v
     for j in cal_log:
         job = j["job"]
-        job.job_id = j['job_id']
+        job.job_id = j["job_id"]
         all_jobs.append(job)
-        if job_ids and (j['job_id'] in job_ids or job.job_dir in job_ids):
-            logger.info('setting job {0} in {1} to rerun'.format(j['job_id'],
-                                                                 job.job_dir))
-            contcar_file = job.job_dir + os.sep + 'CONTCAR'
-            poscar_file = job.job_dir + os.sep + 'POSCAR'
-            if os.path.isfile(contcar_file) and len(
-                    open(contcar_file).readlines()) != 0:
-                logger.info('setting poscar file from {}'
-                            .format(contcar_file))
+        if job_ids and (j["job_id"] in job_ids or job.job_dir in job_ids):
+            logger.info(
+                "setting job {0} in {1} to rerun".format(j["job_id"], job.job_dir)
+            )
+            contcar_file = job.job_dir + os.sep + "CONTCAR"
+            poscar_file = job.job_dir + os.sep + "POSCAR"
+            if (
+                os.path.isfile(contcar_file)
+                and len(open(contcar_file).readlines()) != 0
+            ):
+                logger.info("setting poscar file from {}".format(contcar_file))
                 job.vis.poscar = Poscar.from_file(contcar_file)
             else:
-                logger.info('setting poscar file from {}'
-                            .format(poscar_file))
+                logger.info("setting poscar file from {}".format(poscar_file))
                 job.vis.poscar = Poscar.from_file(poscar_file)
             if incar:
-                logger.info('incar overridden')
+                logger.info("incar overridden")
                 job.vis.incar = incar
             if kpoints:
-                logger.info('kpoints overridden')
+                logger.info("kpoints overridden")
                 job.vis.kpoints = kpoints
             if qadapter:
-                logger.info('qadapter overridden')
+                logger.info("qadapter overridden")
                 job.vis.qadapter = qadapter
             run_jobs.append(job)
     if run_jobs:
@@ -341,14 +366,18 @@ def update_checkpoint(job_ids=None, jfile=None, **kwargs):
         c.run()
     for j in all_jobs:
         final_energy = j.get_final_energy()
-        cal_log_new.append({"job": j.as_dict(),
-                            'job_id': j.job_id,
-                            "corrections": [],
-                            'final_energy': final_energy})
+        cal_log_new.append(
+            {
+                "job": j.as_dict(),
+                "job_id": j.job_id,
+                "corrections": [],
+                "final_energy": final_energy,
+            }
+        )
     dumpfn(cal_log_new, jfile, cls=MontyEncoder, indent=4)
 
 
-def jobs_from_file(filename='calibrate.json'):
+def jobs_from_file(filename="calibrate.json"):
     """
     read in json file of format caibrate.json(the default logfile
     created when jobs are run through calibrate) and return the
@@ -364,8 +393,8 @@ def jobs_from_file(filename='calibrate.json'):
     all_jobs = []
     for j in caljobs:
         job = j["job"]
-        job.job_id = j['job_id']
-        job.final_energy = j['final_energy']
+        job.job_id = j["job_id"]
+        job.final_energy = j["final_energy"]
         all_jobs.append(job)
     return all_jobs
 
@@ -396,16 +425,18 @@ def launch_daemon(steps, interval, handlers=None, ld_logger=None):
                     state, ofname = get_job_state(j)
                     if j.final_energy:
                         done = done + [True]
-                    elif state == 'R':
-                        logger.info('job {} running'.format(j.job_id))
+                    elif state == "R":
+                        logger.info("job {} running".format(j.job_id))
                         done = done + [False]
-                    elif state in ['C', 'CF', 'F', '00']:
+                    elif state in ["C", "CF", "F", "00"]:
                         logger.error(
-                            'Job {0} in {1} cancelled or failed. State = {2}'.
-                            format(j.job_id, j.job_dir, state))
+                            "Job {0} in {1} cancelled or failed. State = {2}".format(
+                                j.job_id, j.job_dir, state
+                            )
+                        )
                         done = done + [False]
                         if handlers:
-                            logger.info('Investigating ... ')
+                            logger.info("Investigating ... ")
                             os.chdir(j.job_dir)
                             if ofname:
                                 if os.path.exists(ofname):
@@ -413,36 +444,44 @@ def launch_daemon(steps, interval, handlers=None, ld_logger=None):
                                         h.output_filename = ofname
                                         if h.check():
                                             logger.error(
-                                                'Detected vasp errors {}'.format(
-                                                    h.errors))
+                                                "Detected vasp errors {}".format(
+                                                    h.errors
+                                                )
+                                            )
                                             # TODO: correct the error and mark the job for rerun
                                             # all error handling must done using proper errorhandlers
                                             # h.correct()
                                             # reruns.append(j.job_id)
                                 else:
                                     logger.error(
-                                        'stdout redirect file not generated, job {} will be rerun'.format(
-                                            j.job_id))
+                                        "stdout redirect file not generated, job {} will be rerun".format(
+                                            j.job_id
+                                        )
+                                    )
                                     reruns.append(j.job_id)
                             os.chdir(j.parent_job_dir)
                     else:
                         logger.info(
-                            'Job {0} pending. State = {1}'.format(j.job_id,
-                                                                  state))
+                            "Job {0} pending. State = {1}".format(j.job_id, state)
+                        )
                         done = done + [False]
             if all(done):
                 logger.info(
-                    'all jobs in {} done. Proceeding to the next one'.format(
-                        step.__name__))
+                    "all jobs in {} done. Proceeding to the next one".format(
+                        step.__name__
+                    )
+                )
                 time.sleep(5)
                 break
             logger.info(
-                'all jobs in {0} NOT done. Next update in {1} seconds'.format(
-                    step.__name__, interval))
+                "all jobs in {0} NOT done. Next update in {1} seconds".format(
+                    step.__name__, interval
+                )
+            )
             time.sleep(interval)
 
 
-def get_convergence_data(jfile, params=('ENCUT', 'KPOINTS')):
+def get_convergence_data(jfile, params=("ENCUT", "KPOINTS")):
     """
     returns data dict in the following format
     {'Al':
@@ -458,21 +497,21 @@ def get_convergence_data(jfile, params=('ENCUT', 'KPOINTS')):
     data = {}
     for j in cutoff_jobs:
         jdir = os.path.join(j.parent_job_dir, j.job_dir)
-        poscar_file = os.path.join(jdir, 'POSCAR')
+        poscar_file = os.path.join(jdir, "POSCAR")
         struct_m = Structure.from_file(poscar_file)
-        species = ''.join([tos.symbol for tos in struct_m.types_of_specie])
+        species = "".join([tos.symbol for tos in struct_m.types_of_specie])
         if data.get(species):
             for p in params:
                 if j.vis.incar.get(p):
-                    data[species][p].append([j.vis.incar[p],
-                                             j.final_energy / len(struct_m)])
-                elif p == 'KPOINTS':
-                    data[species]['KPOINTS'].append([j.vis.kpoints.kpts,
-                                                     j.final_energy / len(
-                                                         struct_m)])
+                    data[species][p].append(
+                        [j.vis.incar[p], j.final_energy / len(struct_m)]
+                    )
+                elif p == "KPOINTS":
+                    data[species]["KPOINTS"].append(
+                        [j.vis.kpoints.kpts, j.final_energy / len(struct_m)]
+                    )
                 else:
-                    logger.warn(
-                        'dont know how to parse the parameter {}'.format(p))
+                    logger.warn("dont know how to parse the parameter {}".format(p))
         else:
             data[species] = {}
             for p in params:
@@ -481,15 +520,14 @@ def get_convergence_data(jfile, params=('ENCUT', 'KPOINTS')):
     return data
 
 
-def get_opt_params(data, species, param='ENCUT', ev_per_atom=0.001):
+def get_opt_params(data, species, param="ENCUT", ev_per_atom=0.001):
     """
     return optimum parameter
     default: 1 meV/atom
     """
     sorted_list = sorted(data[species][param], key=lambda x: x[1])
     sorted_array = np.array(sorted_list)
-    consecutive_diff = np.abs(
-        sorted_array[:-1, 1] - sorted_array[1:, 1] - ev_per_atom)
+    consecutive_diff = np.abs(sorted_array[:-1, 1] - sorted_array[1:, 1] - ev_per_atom)
     min_index = np.argmin(consecutive_diff)
     return sorted_list[min_index][0]
 
@@ -497,7 +535,7 @@ def get_opt_params(data, species, param='ENCUT', ev_per_atom=0.001):
 # PLEASE DONT CHANGE THINGS WITHOUT UPDATING SCRIPTS/MODULES THAT DEPEND
 # ON IT
 # get_convergence_data and get_opt_params moved to *_custom
-def get_convergence_data_custom(jfile, params=('ENCUT', 'KPOINTS')):
+def get_convergence_data_custom(jfile, params=("ENCUT", "KPOINTS")):
     """
     returns data dict in the following format
     {'Al':
@@ -515,27 +553,36 @@ def get_convergence_data_custom(jfile, params=('ENCUT', 'KPOINTS')):
     data = {}
     for j in cutoff_jobs:
         jdir = os.path.join(j.parent_job_dir, j.job_dir)
-        poscar_file = os.path.join(jdir, 'POSCAR')
+        poscar_file = os.path.join(jdir, "POSCAR")
         struct_m = Structure.from_file(poscar_file)
 
-        species = ''.join([tos.symbol for tos in struct_m.types_of_specie])
-        tag = '_'.join([species, Poscar.from_file(poscar_file).comment,
-                        j.vis.potcar.functional])
+        species = "".join([tos.symbol for tos in struct_m.types_of_specie])
+        tag = "_".join(
+            [species, Poscar.from_file(poscar_file).comment, j.vis.potcar.functional]
+        )
         if data.get(tag):
             for p in params:
                 if j.vis.incar.get(p):
-                    data[tag][p].append([j.vis.incar[p],
-                                         j.final_energy / len(struct_m),
-                                         j.vis.potcar, j.vis.poscar])
+                    data[tag][p].append(
+                        [
+                            j.vis.incar[p],
+                            j.final_energy / len(struct_m),
+                            j.vis.potcar,
+                            j.vis.poscar,
+                        ]
+                    )
                     #                print(j.vis.potcar.functional,j.vis.poscar)
-                elif p == 'KPOINTS':
-                    data[tag]['KPOINTS'].append([j.vis.kpoints.kpts,
-                                                 j.final_energy / len(
-                                                     struct_m), j.vis.potcar,
-                                                 j.vis.poscar])
+                elif p == "KPOINTS":
+                    data[tag]["KPOINTS"].append(
+                        [
+                            j.vis.kpoints.kpts,
+                            j.final_energy / len(struct_m),
+                            j.vis.potcar,
+                            j.vis.poscar,
+                        ]
+                    )
                 else:
-                    logger.warn(
-                        'dont know how to parse the parameter {}'.format(p))
+                    logger.warn("dont know how to parse the parameter {}".format(p))
         else:
             data[tag] = {}
             for p in params:
@@ -544,7 +591,7 @@ def get_convergence_data_custom(jfile, params=('ENCUT', 'KPOINTS')):
     return data
 
 
-def get_opt_params_custom(data, tag, param='ENCUT', ev_per_atom=1.0):
+def get_opt_params_custom(data, tag, param="ENCUT", ev_per_atom=1.0):
     """
     Args:
         data:  dictionary of convergence data
@@ -563,14 +610,20 @@ def get_opt_params_custom(data, tag, param='ENCUT', ev_per_atom=1.0):
     # sorted array data
     t = np.array(sorted_list)[:, 1]
     # print(sorted_array[:-1,1], sorted_array[1:,1], ev_per_atom)
-    consecutive_diff = [float(j) - float(i) - ev_per_atom for i, j in
-                        zip(t[:-1], t[1:])]
+    consecutive_diff = [
+        float(j) - float(i) - ev_per_atom for i, j in zip(t[:-1], t[1:])
+    ]
     # print("Consecutive_diff",consecutive_diff)
     min_index = np.argmin(consecutive_diff)
     # return the tag,potcar object, poscar object, incar setting and
     # convergence data for plotting that is optimum
-    return [tag, data[tag][param][min_index][2],
-            data[tag][param][min_index][3], sorted_list[min_index][0], t]
+    return [
+        tag,
+        data[tag][param][min_index][2],
+        data[tag][param][min_index][3],
+        sorted_list[min_index][0],
+        t,
+    ]
 
 
 def partition_jobs(turn_knobs, max_jobs):
@@ -587,8 +640,10 @@ def partition_jobs(turn_knobs, max_jobs):
     partition = range(0, max_len, max(1, int(max_len / partition_size)))
     partition_1 = partition[1:] + [max_len]
     logger.info(
-        '{0} list of length {1} will be partitioned into {2} chunks'.format(
-            max_key, max_len, len(partition)))
+        "{0} list of length {1} will be partitioned into {2} chunks".format(
+            max_key, max_len, len(partition)
+        )
+    )
     turn_knobs_list = []
     name_list = []
     for i, j in zip(partition, partition_1):
@@ -600,7 +655,7 @@ def partition_jobs(turn_knobs, max_jobs):
                 tk_item = (k, v)
             ordered_list.append(tk_item)
         turn_knobs_list.append(OrderedDict(ordered_list))
-        name_list.append('_'.join([str(i), str(j)]))
+        name_list.append("_".join([str(i), str(j)]))
     return turn_knobs_list, name_list
 
 
@@ -614,15 +669,16 @@ def get_logger(log_file_name):
     """
     loggr = logging.getLogger(log_file_name)
     loggr.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
-    fh = logging.FileHandler(log_file_name + '.log', mode='a')
+    formatter = logging.Formatter("%(asctime)s:%(levelname)s:%(message)s")
+    fh = logging.FileHandler(log_file_name + ".log", mode="a")
     fh.setFormatter(formatter)
     loggr.addHandler(fh)
     return loggr
 
 
-def set_sd_flags(poscar_input=None, n_layers=2, top=True, bottom=True,
-                 poscar_output='POSCAR2'):
+def set_sd_flags(
+    poscar_input=None, n_layers=2, top=True, bottom=True, poscar_output="POSCAR2"
+):
     """
     set the relaxation flags for top and bottom layers of interface.
     The upper and lower bounds of the z coordinate are determined
@@ -663,8 +719,11 @@ def print_exception():
     filename = f.f_code.co_filename
     linecache.checkcache(filename)
     line = linecache.getline(filename, lineno, f.f_globals)
-    print('EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno,
-                                                       line.strip(), exc_obj))
+    print(
+        'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(
+            filename, lineno, line.strip(), exc_obj
+        )
+    )
 
 
 def is_converged(directory):
@@ -679,7 +738,7 @@ def is_converged(directory):
     """
 
     try:
-        return Vasprun('{}/vasprun.xml'.format(directory)).converged
+        return Vasprun("{}/vasprun.xml".format(directory)).converged
     except:
         return False
 
@@ -734,10 +793,11 @@ def add_vacuum(structure, vacuum):
     structure = align_axis(structure)
     lattice = np.array(structure.lattice.matrix)
     lattice[2][2] += vacuum
-    #structure.lattice = Lattice(lattice)
-    #return center_slab(structure)
-    vac_added_structure = Structure(lattice, structure.species,\
-                     structure.cart_coords, coords_are_cartesian=True)
+    # structure.lattice = Lattice(lattice)
+    # return center_slab(structure)
+    vac_added_structure = Structure(
+        lattice, structure.species, structure.cart_coords, coords_are_cartesian=True
+    )
     return center_slab(vac_added_structure)
 
 
@@ -775,17 +835,21 @@ def get_rotation_matrix(axis, theta):
 
     axis = np.array(list(axis))
     axis = axis / np.linalg.norm(axis)
-    axis *= -np.sin(theta/2.0)
-    a = np.cos(theta/2.0)
+    axis *= -np.sin(theta / 2.0)
+    a = np.cos(theta / 2.0)
     b, c, d = tuple(axis.tolist())
-    aa, bb, cc, dd = a*a, b*b, c*c, d*d
-    bc, ad, ac, ab, bd, cd = b*c, a*d, a*c, a*b, b*d, c*d
-    return np.array([[aa+bb-cc-dd, 2*(bc+ad), 2*(bd-ac)],
-                     [2*(bc-ad), aa+cc-bb-dd, 2*(cd+ab)],
-                     [2*(bd+ac), 2*(cd-ab), aa+dd-bb-cc]])
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    return np.array(
+        [
+            [aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+            [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+            [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc],
+        ]
+    )
 
 
-def align_axis(structure, axis='c', direction=(0, 0, 1)):
+def align_axis(structure, axis="c", direction=(0, 0, 1)):
     """
     Rotates a structure so that the specified axis is along
     the [001] direction. This is useful for adding vacuum, and
@@ -799,30 +863,29 @@ def align_axis(structure, axis='c', direction=(0, 0, 1)):
         structure. Rotated to align axis along direction.
     """
 
-    if axis == 'a':
+    if axis == "a":
         axis = structure.lattice._matrix[0]
-    elif axis == 'b':
+    elif axis == "b":
         axis = structure.lattice._matrix[1]
-    elif axis == 'c':
+    elif axis == "c":
         axis = structure.lattice._matrix[2]
     proj_axis = np.cross(axis, direction)
-    if not(proj_axis[0] == 0 and proj_axis[1] == 0):
-        theta = (
-            np.arccos(np.dot(axis, direction)
-            / (np.linalg.norm(axis) * np.linalg.norm(direction)))
+    if not (proj_axis[0] == 0 and proj_axis[1] == 0):
+        theta = np.arccos(
+            np.dot(axis, direction) / (np.linalg.norm(axis) * np.linalg.norm(direction))
         )
         R = get_rotation_matrix(proj_axis, theta)
         rotation = SymmOp.from_rotation_and_translation(rotation_matrix=R)
         structure.apply_operation(rotation)
-    if axis == 'c' and direction == (0, 0, 1):
+    if axis == "c" and direction == (0, 0, 1):
         structure.lattice._matrix[2][2] = abs(structure.lattice._matrix[2][2])
 
     return structure
 
 
-def get_structure_type(structure, tol=0.1, seed_index=0,
-                       write_poscar_from_cluster=False):
-
+def get_structure_type(
+    structure, tol=0.1, seed_index=0, write_poscar_from_cluster=False
+):
     """
     This is a topology-scaling algorithm used to describe the
     periodicity of bonded clusters in a bulk structure.
@@ -866,7 +929,7 @@ def get_structure_type(structure, tol=0.1, seed_index=0,
         # Rows (`radii`) and columns (`radiiT`) of radii.
         radii = [ELEMENT_RADII[site.species_string] for site in s.sites]
         radiiT = np.array(radii)[np.newaxis].T
-        radii_matrix = radii + radiiT*(1+tol)
+        radii_matrix = radii + radiiT * (1 + tol)
 
         # elements of temp that have value less than 0 are bonded.
         temp = distance_matrix - radii_matrix
@@ -875,7 +938,7 @@ def get_structure_type(structure, tol=0.1, seed_index=0,
         binary_matrix = (temp < 0).astype(int)
 
         # list of atoms bonded to the seed atom of a cluster
-        seed = set((np.where(binary_matrix[seed_index]==1))[0])
+        seed = set((np.where(binary_matrix[seed_index] == 1))[0])
         cluster = seed
         NEW = seed
         while True:
@@ -883,25 +946,26 @@ def get_structure_type(structure, tol=0.1, seed_index=0,
             for n in NEW:
                 # temp_set will have all atoms, without duplicates,
                 # that are connected to all atoms in NEW.
-                temp_set.update(set(np.where(binary_matrix[n]==1)[0]))
+                temp_set.update(set(np.where(binary_matrix[n] == 1)[0]))
 
             if temp_set.issubset(cluster):
                 # if temp_set has no new atoms, the search is done.
                 break
             else:
-                NEW = temp_set - cluster # List of newly discovered atoms
-                cluster.update(temp_set) # cluster is updated with new atoms
+                NEW = temp_set - cluster  # List of newly discovered atoms
+                cluster.update(temp_set)  # cluster is updated with new atoms
 
         if len(cluster) == 0:  # i.e. the cluster is a single atom.
             cluster = [seed_index]  # Make sure it's not empty to write POSCAR.
             type = "molecular"
 
-        elif len(cluster) == len(s.sites): # i.e. all atoms are bonded.
+        elif len(cluster) == len(s.sites):  # i.e. all atoms are bonded.
             type = "conventional"
 
         else:
-            cmp = Composition.from_dict(Counter([s[l].specie.name for l in
-                                        list(cluster)]))
+            cmp = Composition.from_dict(
+                Counter([s[l].specie.name for l in list(cluster)])
+            )
             if cmp.reduced_formula != s.composition.reduced_formula:
                 # i.e. the cluster does not have the same composition
                 # as the overall crystal; therefore there are other
@@ -914,21 +978,21 @@ def get_structure_type(structure, tol=0.1, seed_index=0,
             # of cluster search as before.
             s.make_supercell(2)
             distance_matrix = s.distance_matrix
-            np.fill_diagonal(distance_matrix,100)
+            np.fill_diagonal(distance_matrix, 100)
             radii = [ELEMENT_RADII[site.species_string] for site in s.sites]
             radiiT = np.array(radii)[np.newaxis].T
-            radii_matrix = radii + radiiT*(1+tol)
-            temp = distance_matrix-radii_matrix
+            radii_matrix = radii + radiiT * (1 + tol)
+            temp = distance_matrix - radii_matrix
             binary_matrix = (temp < 0).astype(int)
 
-            seed = set((np.where(binary_matrix[seed_index]==1))[0])
+            seed = set((np.where(binary_matrix[seed_index] == 1))[0])
             cluster = seed
             NEW = seed
             check = True
             while check:
                 temp_set = set()
                 for n in NEW:
-                    temp_set.update(set(np.where(binary_matrix[n]==1)[0]))
+                    temp_set.update(set(np.where(binary_matrix[n] == 1)[0]))
 
                 if temp_set.issubset(cluster):
                     check = False
@@ -945,13 +1009,12 @@ def get_structure_type(structure, tol=0.1, seed_index=0,
 
     cluster_sites = [s.sites[n] for n in cluster]
     if write_poscar_from_cluster:
-        s.from_sites(cluster_sites).get_primitive_structure().to("POSCAR",
-                                                                 "POSCAR")
+        s.from_sites(cluster_sites).get_primitive_structure().to("POSCAR", "POSCAR")
 
     return type
 
 
-def write_potcar(pot_path=VASP_PSP, types='None'):
+def write_potcar(pot_path=VASP_PSP, types="None"):
     """
     Writes a POTCAR file based on a list of types.
 
@@ -970,22 +1033,22 @@ def write_potcar(pot_path=VASP_PSP, types='None'):
         # been set up.
         pass
     else:
-        poscar = open('POSCAR', 'r')
+        poscar = open("POSCAR", "r")
         lines = poscar.readlines()
         elements = lines[5].split()
         poscar.close()
 
         potcar_symbols = loadfn(
-            os.path.join(PACKAGE_PATH, 'mat2d', 'potcar_symbols.yaml')
+            os.path.join(PACKAGE_PATH, "mat2d", "potcar_symbols.yaml")
         )
 
-        if types == 'None':
+        if types == "None":
             sorted_types = [potcar_symbols[elt] for elt in elements]
         else:
             sorted_types = []
             for elt in elements:
                 for t in types:
-                    if t.split('_')[0] == elt:
+                    if t.split("_")[0] == elt:
                         sorted_types.append(t)
 
         potentials = []
@@ -993,8 +1056,8 @@ def write_potcar(pot_path=VASP_PSP, types='None'):
         # Create paths, open files, and write files to
         # POTCAR for each potential.
         for potential in sorted_types:
-            potentials.append('{}/{}/POTCAR'.format(pot_path, potential))
-        outfile = open('POTCAR', 'w')
+            potentials.append("{}/{}/POTCAR".format(pot_path, potential))
+        outfile = open("POTCAR", "w")
         for potential in potentials:
             infile = open(potential)
             for line in infile:
@@ -1024,13 +1087,14 @@ def write_circle_mesh_kpoints(center=[0, 0, 0], radius=0.1, resolution=20):
     for i in range(-resolution, resolution):
         for j in range(-resolution, resolution):
             if i**2 + j**2 <= resolution**2:
-                kpoints.append([str(center[0]+step*i),
-                                str(center[1]+step*j), '0', '1'])
-    with open('KPOINTS', 'w') as kpts:
-        kpts.write('KPOINTS\n{}\ndirect\n'.format(len(kpoints)))
+                kpoints.append(
+                    [str(center[0] + step * i), str(center[1] + step * j), "0", "1"]
+                )
+    with open("KPOINTS", "w") as kpts:
+        kpts.write("KPOINTS\n{}\ndirect\n".format(len(kpoints)))
         for kpt in kpoints:
-            kpts.write(' '.join(kpt))
-            kpts.write('\n')
+            kpts.write(" ".join(kpt))
+            kpts.write("\n")
 
 
 def get_markovian_path(points):
@@ -1051,8 +1115,8 @@ def get_markovian_path(points):
 
     paths = [p for p in it.permutations(points)]
     path_distances = [
-        sum(map(lambda x: dist(x[0], x[1]), zip(p[:-1], p[1:])))
-        for p in paths]
+        sum(map(lambda x: dist(x[0], x[1]), zip(p[:-1], p[1:]))) for p in paths
+    ]
     min_index = np.argmin(path_distances)
 
     return paths[min_index]
@@ -1064,7 +1128,7 @@ def remove_z_kpoints():
     z-component, since these are not relevant for 2D materials and
     slabs.
     """
-    kpoint_file = open('KPOINTS')
+    kpoint_file = open("KPOINTS")
     kpoint_lines = kpoint_file.readlines()
     kpoint_file.close()
 
@@ -1074,21 +1138,25 @@ def remove_z_kpoints():
 
     while i < len(kpoint_lines):
         kpt_1 = kpoint_lines[i].split()
-        kpt_2 = kpoint_lines[i+1].split()
-        if float(kpt_1[2]) == 0.0 and [float(kpt_1[0]),
-                                       float(kpt_1[1])] not in twod_kpoints:
+        kpt_2 = kpoint_lines[i + 1].split()
+        if (
+            float(kpt_1[2]) == 0.0
+            and [float(kpt_1[0]), float(kpt_1[1])] not in twod_kpoints
+        ):
             twod_kpoints.append([float(kpt_1[0]), float(kpt_1[1])])
             labels[kpt_1[4]] = [float(kpt_1[0]), float(kpt_1[1])]
 
-        if float(kpt_2[2]) == 0.0 and [float(kpt_2[0]),
-                                       float(kpt_2[1])] not in twod_kpoints:
+        if (
+            float(kpt_2[2]) == 0.0
+            and [float(kpt_2[0]), float(kpt_2[1])] not in twod_kpoints
+        ):
             twod_kpoints.append([float(kpt_2[0]), float(kpt_2[1])])
             labels[kpt_2[4]] = [float(kpt_2[0]), float(kpt_2[1])]
         i += 3
 
     kpath = get_markovian_path(twod_kpoints)
 
-    with open('KPOINTS', 'w') as kpts:
+    with open("KPOINTS", "w") as kpts:
         for line in kpoint_lines[:4]:
             kpts.write(line)
 
@@ -1098,16 +1166,15 @@ def remove_z_kpoints():
                 kpt_2 = kpath[0]
                 label_2 = [l for l in labels if labels[l] == kpath[0]][0]
             else:
-                kpt_2 = kpath[i+1]
-                label_2 = [l for l in labels if labels[l] == kpath[i+1]][0]
+                kpt_2 = kpath[i + 1]
+                label_2 = [l for l in labels if labels[l] == kpath[i + 1]][0]
 
-            kpts.write(' '.join([str(kpath[i][0]), str(kpath[i][1]), '0.0 !',
-                                label_1]))
-            kpts.write('\n')
-            kpts.write(' '.join([str(kpt_2[0]), str(kpt_2[1]), '0.0 !',
-                                label_2]))
-            kpts.write('\n\n')
+            kpts.write(" ".join([str(kpath[i][0]), str(kpath[i][1]), "0.0 !", label_1]))
+            kpts.write("\n")
+            kpts.write(" ".join([str(kpt_2[0]), str(kpt_2[1]), "0.0 !", label_2]))
+            kpts.write("\n\n")
     kpts.close()
+
 
 def update_submission_template(default_template, qtemplate):
     """
@@ -1117,6 +1184,7 @@ def update_submission_template(default_template, qtemplate):
     which is a yaml of commonly modified user arguments
     """
     pass
+
 
 def write_pbs_runjob(name, nnodes, nprocessors, pmem, walltime, binary):
     """
@@ -1132,19 +1200,19 @@ def write_pbs_runjob(name, nnodes, nprocessors, pmem, walltime, binary):
         walltime (str): requested wall time, hh:mm:ss e.g. '2:00:00'.
         binary (str): absolute path to binary to run.
     """
-    runjob = open('runjob', 'w')
-    runjob.write('#!/bin/sh\n')
-    runjob.write('#PBS -N {}\n'.format(name))
-    runjob.write('#PBS -o test.out\n')
-    runjob.write('#PBS -e test.err\n')
-    runjob.write('#PBS -r n\n')
-    runjob.write('#PBS -l walltime={}\n'.format(walltime))
-    runjob.write('#PBS -l nodes={}:ppn={}\n'.format(nnodes, nprocessors))
-    runjob.write('#PBS -l pmem={}\n'.format(pmem))
-    runjob.write('#PBS -W group_list=hennig\n\n')
-    runjob.write('cd $PBS_O_WORKDIR\n\n')
-    runjob.write('mpirun {} > job.log\n\n'.format(binary))
-    runjob.write('echo \'Done.\'\n')
+    runjob = open("runjob", "w")
+    runjob.write("#!/bin/sh\n")
+    runjob.write("#PBS -N {}\n".format(name))
+    runjob.write("#PBS -o test.out\n")
+    runjob.write("#PBS -e test.err\n")
+    runjob.write("#PBS -r n\n")
+    runjob.write("#PBS -l walltime={}\n".format(walltime))
+    runjob.write("#PBS -l nodes={}:ppn={}\n".format(nnodes, nprocessors))
+    runjob.write("#PBS -l pmem={}\n".format(pmem))
+    runjob.write("#PBS -W group_list=hennig\n\n")
+    runjob.write("cd $PBS_O_WORKDIR\n\n")
+    runjob.write("mpirun {} > job.log\n\n".format(binary))
+    runjob.write("echo 'Done.'\n")
     runjob.close()
 
 
@@ -1164,21 +1232,21 @@ def write_slurm_runjob(name, ntasks, pmem, walltime, binary):
 
     nnodes = int(np.ceil(float(ntasks) / 32.0))
 
-    runjob = open('runjob', 'w')
-    runjob.write('#!/bin/bash\n')
-    runjob.write('#SBATCH --job-name={}\n'.format(name))
-    runjob.write('#SBATCH -o out_%j.log\n')
-    runjob.write('#SBATCH -e err_%j.log\n')
-    runjob.write('#SBATCH --qos=hennig-b\n')
-    runjob.write('#SBATCH --nodes={}\n'.format(nnodes))
-    runjob.write('#SBATCH --ntasks={}\n'.format(ntasks))
-    runjob.write('#SBATCH --mem-per-cpu={}\n'.format(pmem))
-    runjob.write('#SBATCH -t {}\n\n'.format(walltime))
-    runjob.write('cd $SLURM_SUBMIT_DIR\n\n')
-    runjob.write('module purge\n')    
-    runjob.write('module load intel/2018\n')
-    runjob.write('module load openmpi/3.1.2\n')
-   # runjob.write('module load vasp/5.4.1\n\n')
-    runjob.write('mpirun {} > job.log\n\n'.format(binary))
-    runjob.write('echo \'Done.\'\n')
+    runjob = open("runjob", "w")
+    runjob.write("#!/bin/bash\n")
+    runjob.write("#SBATCH --job-name={}\n".format(name))
+    runjob.write("#SBATCH -o out_%j.log\n")
+    runjob.write("#SBATCH -e err_%j.log\n")
+    runjob.write("#SBATCH --qos=hennig-b\n")
+    runjob.write("#SBATCH --nodes={}\n".format(nnodes))
+    runjob.write("#SBATCH --ntasks={}\n".format(ntasks))
+    runjob.write("#SBATCH --mem-per-cpu={}\n".format(pmem))
+    runjob.write("#SBATCH -t {}\n\n".format(walltime))
+    runjob.write("cd $SLURM_SUBMIT_DIR\n\n")
+    runjob.write("module purge\n")
+    runjob.write("module load intel/2018\n")
+    runjob.write("module load openmpi/3.1.2\n")
+    # runjob.write('module load vasp/5.4.1\n\n')
+    runjob.write("mpirun {} > job.log\n\n".format(binary))
+    runjob.write("echo 'Done.'\n")
     runjob.close()

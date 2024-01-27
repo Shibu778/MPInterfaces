@@ -44,7 +44,7 @@ class Nanoparticle(Molecule):
         recp_lattice = self.structure.lattice.reciprocal_lattice_crystallographic
         self.recp_lattice = recp_lattice.scale(1)
         self.set_miller_family()
-        Molecule.__init__(self, [sn[0].species_and_occu
+        Molecule.__init__(self, [sn[0].species
                                  for sn in spherical_neighbors],
                           [sn[0].coords for sn in spherical_neighbors],
                           charge=0)
